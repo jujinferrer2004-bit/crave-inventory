@@ -241,6 +241,35 @@ export default function InventoryManagement() {
 
   const colWidths = ["24%", "14%", "14%", "10%", "12%", "26%"];
   const pendingCount = requests.filter((r) => r.status === "pending").length;
+  const [logFilterAction, setLogFilterAction] = useState("All");
+  const [logFilterDate, setLogFilterDate] = useState("All");
+  const [logSort, setLogSort] = useState("Newest");
+
+  const filteredLog = useMemo(() => {
+    const now = new Date();
+    return [...activityLog]
+      .filter((entry) => {
+        if (logFilterAction !== "All" && entry.action !== logFilterAction) return false;
+        if (logFilterDate === "Today") {
+          const d = new Date(entry.timestamp);
+          return d.toDateString() === now.toDateString();
+        }
+        if (logFilterDate === "This Week") {
+          const d = new Date(entry.timestamp);
+          const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+          return d >= weekAgo;
+        }
+        if (logFilterDate === "This Month") {
+          const d = new Date(entry.timestamp);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        }
+        return true;
+      })
+      .sort((a, b) => logSort === "Newest"
+        ? new Date(b.timestamp) - new Date(a.timestamp)
+        : new Date(a.timestamp) - new Date(b.timestamp)
+      );
+  }, [activityLog, logFilterAction, logFilterDate, logSort]);
 
   return (
     <div className="root" data-theme={theme}>
@@ -482,8 +511,32 @@ export default function InventoryManagement() {
             <div className="section-label" style={{ marginBottom: 0 }}>Activity Log</div>
             <button onClick={() => { setActivityLog([]); localStorage.removeItem("crave_inventory_log"); }} className="clear-log-btn">Clear Log</button>
           </div>
+
+          {/* Filters */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: "1rem" }}>
+            <select value={logFilterAction} onChange={(e) => setLogFilterAction(e.target.value)} className="select-input" style={{ width: "auto", fontSize: 12 }}>
+              {["All", "Add Item", "Edit Item", "Delete Item", "Stock In", "Stock Out", "Approve Request", "Decline Request"].map((a) => (
+                <option key={a}>{a}</option>
+              ))}
+            </select>
+            <select value={logFilterDate} onChange={(e) => setLogFilterDate(e.target.value)} className="select-input" style={{ width: "auto", fontSize: 12 }}>
+              {["All", "Today", "This Week", "This Month"].map((d) => (
+                <option key={d}>{d}</option>
+              ))}
+            </select>
+            <select value={logSort} onChange={(e) => setLogSort(e.target.value)} className="select-input" style={{ width: "auto", fontSize: 12 }}>
+              <option>Newest</option>
+              <option>Oldest</option>
+            </select>
+            <span style={{ fontSize: 12, alignSelf: "center", color: "#888" }}>
+              {filteredLog.length} {filteredLog.length === 1 ? "entry" : "entries"}
+            </span>
+          </div>
+
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {activityLog.map((entry) => (
+            {filteredLog.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "2rem", fontSize: 13, color: "#888" }}>No entries match your filters.</div>
+            ) : filteredLog.map((entry) => (
               <div key={entry.id} className="activity-entry">
                 <div className="activity-entry-left">
                   <span className="activity-entry-action">{entry.action}</span>
