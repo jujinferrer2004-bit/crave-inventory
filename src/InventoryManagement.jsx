@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useAuth } from "./AuthContext";
 
 const CATEGORIES = ["Electronics", "Clothing", "Food", "Tools", "Other"];
 const UNITS = ["pcs", "meters", "kg", "liters"];
@@ -287,6 +288,13 @@ const styles = {
 };
 
 export default function InventoryManagement() {
+  const { role, logout } = useAuth();
+  const [requests, setRequests] = useState(() => {
+    try {
+      const saved = localStorage.getItem("crave_inventory_requests");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [items, setItems] = useState(() => {
     try {
       const saved = localStorage.getItem("crave_inventory_items");
@@ -313,6 +321,34 @@ export default function InventoryManagement() {
     localStorage.setItem("crave_inventory_nextId", JSON.stringify(nextId));
   }, [nextId]);
 
+  useEffect(() => {
+    localStorage.setItem("crave_inventory_requests", JSON.stringify(requests));
+  }, [requests]);
+
+  function submitRequest(type, payload) {
+    const req = { id: Date.now(), type, payload, status: "pending" };
+    setRequests((prev) => [...prev, req]);
+  }
+
+  function approveRequest(reqId) {
+    const req = requests.find((r) => r.id === reqId);
+    if (!req) return;
+    if (req.type === "add") {
+      const obj = { ...req.payload, id: nextId };
+      setItems((prev) => [...prev, obj]);
+      setNextId((n) => n + 1);
+    } else if (req.type === "stock_in") {
+      setItems((prev) => prev.map((i) => i.id === req.payload.itemId ? { ...i, qty: i.qty + req.payload.qty } : i));
+    } else if (req.type === "stock_out") {
+      setItems((prev) => prev.map((i) => i.id === req.payload.itemId ? { ...i, qty: Math.max(0, i.qty - req.payload.qty) } : i));
+    }
+    setRequests((prev) => prev.map((r) => r.id === reqId ? { ...r, status: "approved" } : r));
+  }
+
+  function declineRequest(reqId) {
+    setRequests((prev) => prev.map((r) => r.id === reqId ? { ...r, status: "declined" } : r));
+  }
+
 const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return items.filter(
@@ -329,6 +365,11 @@ const filtered = useMemo(() => {
     outStock: items.filter((i) => i.qty === 0).length,
   }), [items]);
 
+  const [stockModal, setStockModal] = useState(false);
+  const [stockType, setStockType] = useState("stock_in");
+  const [stockTarget, setStockTarget] = useState(null);
+  const [stockQty, setStockQty] = useState(1);
+
   function openAdd() { setEditId(null); setForm(emptyForm); setModal(true); }
   function openEdit(item) { setEditId(item.id); setForm({ name: item.name, category: item.category, qty: item.qty, unit: item.unit, low: item.low }); setModal(true); }
   function closeModal() { setModal(false); }
@@ -336,17 +377,48 @@ const filtered = useMemo(() => {
 
   function handleSave() {
     if (!form.name.trim()) return;
-    const obj = { id: editId ?? nextId, name: form.name.trim(), category: form.category, qty: parseInt(form.qty) || 0, unit: form.unit, low: parseInt(form.low) || 5 };
-    if (editId !== null) { setItems((prev) => prev.map((i) => (i.id === editId ? obj : i))); }
-    else { setItems((prev) => [...prev, obj]); setNextId((n) => n + 1); }
+    const payload = { name: form.name.trim(), category: form.category, qty: parseInt(form.qty) || 0, unit: form.unit, low: parseInt(form.low) || 5 };
+    if (role === "manager") {
+      const obj = { ...payload, id: editId ?? nextId };
+      if (editId !== null) { setItems((prev) => prev.map((i) => (i.id === editId ? obj : i))); }
+      else { setItems((prev) => [...prev, obj]); setNextId((n) => n + 1); }
+    } else {
+      submitRequest("add", payload);
+      alert("Request submitted! Waiting for manager approval.");
+    }
     closeModal();
   }
 
   function handleDelete(id) {
+    if (role !== "manager") return;
     if (window.confirm("Delete this item?")) setItems((prev) => prev.filter((i) => i.id !== id));
   }
 
-  const colWidths = ["28%", "16%", "16%", "12%", "14%", "14%"];
+  function openStockModal(item, type) {
+    setStockTarget(item);
+    setStockType(type);
+    setStockQty(1);
+    setStockModal(true);
+  }
+
+  function handleStockSubmit() {
+    if (!stockTarget || stockQty < 1) return;
+    const qty = parseInt(stockQty) || 1;
+    if (role === "manager") {
+      if (stockType === "stock_in") {
+        setItems((prev) => prev.map((i) => i.id === stockTarget.id ? { ...i, qty: i.qty + qty } : i));
+      } else {
+        setItems((prev) => prev.map((i) => i.id === stockTarget.id ? { ...i, qty: Math.max(0, i.qty - qty) } : i));
+      }
+    } else {
+      submitRequest(stockType, { itemId: stockTarget.id, itemName: stockTarget.name, qty });
+      alert("Request submitted! Waiting for manager approval.");
+    }
+    setStockModal(false);
+  }
+
+  const colWidths = ["24%", "14%", "14%", "10%", "12%", "26%"];
+  const pendingCount = requests.filter((r) => r.status === "pending").length;
 
   return (
     <div style={styles.root}>
@@ -360,7 +432,11 @@ const filtered = useMemo(() => {
             INVENTORY
           </span>
         </div>
-        <span style={styles.headerRight}>{new Date().toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" })}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <span style={styles.headerRight}>{new Date().toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" })}</span>
+          <span style={{ fontSize: 12, color: "#c8a96e", letterSpacing: "0.05em", textTransform: "uppercase" }}>{role}</span>
+          <button onClick={logout} style={{ background: "none", border: "1px solid #2a2a2a", borderRadius: 6, padding: "5px 12px", color: "#555", fontSize: 12, cursor: "pointer" }}>Logout</button>
+        </div>
       </header>
 
       <div style={styles.body}>
@@ -395,7 +471,12 @@ const filtered = useMemo(() => {
             <option value="">All categories</option>
             {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-          <button onClick={openAdd} style={styles.addBtn}>+ Add Item</button>
+          <button onClick={openAdd} style={styles.addBtn}>+ {role === "manager" ? "Add Item" : "Request Item"}</button>
+          {role === "manager" && pendingCount > 0 && (
+            <span style={{ background: "#c8a96e", color: "#0f0f0f", borderRadius: 99, padding: "4px 10px", fontSize: 12, fontWeight: 700 }}>
+              {pendingCount} pending
+            </span>
+          )}
         </div>
 
         {/* Table */}
@@ -429,8 +510,10 @@ const filtered = useMemo(() => {
                       <span style={{ ...styles.badge, ...styles.badges[cls] }}>{label}</span>
                     </td>
                     <td style={{ ...styles.td, width: colWidths[5], textAlign: "center" }}>
-                      <button onClick={() => openEdit(item)} title="Edit" style={styles.actionBtn}>✏️</button>
-                      <button onClick={() => handleDelete(item.id)} title="Delete" style={styles.actionBtn}>🗑️</button>
+                      <button onClick={() => openStockModal(item, "stock_in")} title="Stock In" style={{ ...styles.actionBtn, color: "#5db876" }}>＋ In</button>
+                      <button onClick={() => openStockModal(item, "stock_out")} title="Stock Out" style={{ ...styles.actionBtn, color: "#e05c5c" }}>－ Out</button>
+                      {role === "manager" && <button onClick={() => openEdit(item)} title="Edit" style={styles.actionBtn}>✏️</button>}
+                      {role === "manager" && <button onClick={() => handleDelete(item.id)} title="Delete" style={styles.actionBtn}>🗑️</button>}
                     </td>
                   </tr>
                 );
@@ -444,6 +527,49 @@ const filtered = useMemo(() => {
           {filtered.length} of {items.length} items
         </div>
       </div>
+
+      {/* Stock Modal */}
+      {stockModal && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) setStockModal(false); }} style={styles.modalBg}>
+          <div style={styles.modal}>
+            <div style={styles.modalTitle}>{stockType === "stock_in" ? "Stock In" : "Stock Out"} — {stockTarget?.name}</div>
+            <label style={styles.fieldLabel}>Quantity</label>
+            <input type="number" min="1" value={stockQty} onChange={(e) => setStockQty(e.target.value)} style={styles.fieldInput} />
+            {role === "member" && <p style={{ fontSize: 12, color: "#555", marginTop: 8 }}>This will be sent to the manager for approval.</p>}
+            <div style={styles.modalActions}>
+              <button onClick={() => setStockModal(false)} style={styles.cancelBtn}>Cancel</button>
+              <button onClick={handleStockSubmit} style={styles.saveBtn}>{role === "manager" ? "Confirm" : "Submit Request"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Requests Panel — Manager Only */}
+      {role === "manager" && requests.filter(r => r.status === "pending").length > 0 && (
+        <div style={{ marginTop: "2rem" }}>
+          <div style={{ fontSize: 11, color: "#555", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "1rem", fontWeight: 500 }}>Pending Requests</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {requests.filter(r => r.status === "pending").map(req => (
+              <div key={req.id} style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 10, padding: "1rem 1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div>
+                  <span style={{ fontSize: 11, color: "#c8a96e", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>
+                    {req.type === "add" ? "New Item" : req.type === "stock_in" ? "Stock In" : "Stock Out"}
+                  </span>
+                  <div style={{ fontSize: 13, color: "#f0ede8", marginTop: 4 }}>
+                    {req.type === "add"
+                      ? `${req.payload.name} — ${req.payload.qty} ${req.payload.unit} (${req.payload.category})`
+                      : `${req.payload.itemName} — ${req.payload.qty} units`}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => approveRequest(req.id)} style={{ background: "#0e2a14", border: "1px solid #1a4a22", color: "#5db876", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Approve</button>
+                  <button onClick={() => declineRequest(req.id)} style={{ background: "#2a0e0e", border: "1px solid #4a1414", color: "#e05c5c", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Decline</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {modal && (
