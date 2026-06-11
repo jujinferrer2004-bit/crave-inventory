@@ -1,0 +1,17 @@
+{
+  "name": "CRAVE Inventory",
+  "short_name": "CRAVE",
+  "description": "CRAVE Stock Management System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#c0392b",
+  "orientation": "portrait-primary",
+  "icons": [
+  {
+    "src": "/CRAVE CORP HIGH QUALITY LOGO.png",
+    "sizes": "512x512",
+    "type": "image/png"
+  }
+]
+}
