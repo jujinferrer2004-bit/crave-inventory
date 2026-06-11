@@ -517,7 +517,36 @@ const filtered = useMemo(() => {
 
   const styles = getStyles(isDark);
   const colWidths = ["24%", "14%", "14%", "10%", "12%", "26%"];
+  const [logFilterAction, setLogFilterAction] = useState("All");
+  const [logFilterDate, setLogFilterDate] = useState("All");
+  const [logSort, setLogSort] = useState("Newest");
   const pendingCount = requests.filter((r) => r.status === "pending").length;
+
+  const filteredLog = useMemo(() => {
+    const now = new Date();
+    return [...activityLog]
+      .filter((entry) => {
+        if (logFilterAction !== "All" && entry.action !== logFilterAction) return false;
+        if (logFilterDate === "Today") {
+          const d = new Date(entry.timestamp);
+          return d.toDateString() === now.toDateString();
+        }
+        if (logFilterDate === "This Week") {
+          const d = new Date(entry.timestamp);
+          const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+          return d >= weekAgo;
+        }
+        if (logFilterDate === "This Month") {
+          const d = new Date(entry.timestamp);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        }
+        return true;
+      })
+      .sort((a, b) => logSort === "Newest"
+        ? new Date(b.timestamp) - new Date(a.timestamp)
+        : new Date(a.timestamp) - new Date(b.timestamp)
+      );
+  }, [activityLog, logFilterAction, logFilterDate, logSort]);
 
   return (
     <div style={styles.root}>
@@ -759,8 +788,32 @@ const filtered = useMemo(() => {
             <div style={{ fontSize: 11, color: isDark ? "#555" : "#999", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 500 }}>Activity Log</div>
             <button onClick={() => { setActivityLog([]); localStorage.removeItem("crave_inventory_log"); }} style={{ background: "none", border: `1px solid ${isDark ? "#2a2a2a" : "#d0cdc8"}`, borderRadius: 6, padding: "4px 10px", fontSize: 11, color: isDark ? "#555" : "#999", cursor: "pointer" }}>Clear Log</button>
           </div>
+
+          {/* Filters */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: "1rem" }}>
+            <select value={logFilterAction} onChange={(e) => setLogFilterAction(e.target.value)} style={{ ...styles.selectInput, width: "auto", fontSize: 12 }}>
+              {["All", "Add Item", "Edit Item", "Delete Item", "Stock In", "Stock Out", "Approve Request", "Decline Request"].map((a) => (
+                <option key={a}>{a}</option>
+              ))}
+            </select>
+            <select value={logFilterDate} onChange={(e) => setLogFilterDate(e.target.value)} style={{ ...styles.selectInput, width: "auto", fontSize: 12 }}>
+              {["All", "Today", "This Week", "This Month"].map((d) => (
+                <option key={d}>{d}</option>
+              ))}
+            </select>
+            <select value={logSort} onChange={(e) => setLogSort(e.target.value)} style={{ ...styles.selectInput, width: "auto", fontSize: 12 }}>
+              <option>Newest</option>
+              <option>Oldest</option>
+            </select>
+            <span style={{ fontSize: 12, color: isDark ? "#444" : "#bbb", alignSelf: "center" }}>
+              {filteredLog.length} {filteredLog.length === 1 ? "entry" : "entries"}
+            </span>
+          </div>
+
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {activityLog.map((entry) => (
+            {filteredLog.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "2rem", fontSize: 13, color: isDark ? "#333" : "#bbb" }}>No entries match your filters.</div>
+            ) : filteredLog.map((entry) => (
               <div key={entry.id} style={{ background: isDark ? "#141414" : "#ffffff", border: `1px solid ${isDark ? "#1e1e1e" : "#e0ddd8"}`, borderRadius: 10, padding: "0.75rem 1.25rem", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                   <span style={{ fontSize: 11, color: "#c0392b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>{entry.action}</span>
