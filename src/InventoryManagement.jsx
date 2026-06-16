@@ -28,10 +28,159 @@ function generateCartId() {
   return `CART-${stamp}-${rand}`;
 }
 
-const emptyForm = { name: "", category: "Electronics", qty: 0, unit: "pcs", low: 5 };
+const emptyForm = { name: "", category: "Electronics", qty: 0, unit: "pcs", low: 5, serialNumber: "", barcode: "", supplier: "", dateOfPurchase: "", warrantyDate: "" };
 
 // ─── Stock Picker Panel ────────────────────────────────────────────────────────
-function StockPickerPanel({ items, type, onAddToCart, onClose }) {
+const SUPPLIERS = ["Select Supplier", "Supplier A", "Supplier B", "Supplier C", "Supplier D", "Other"];
+
+function StockInForm({ onAddToCart, onClose }) {
+  const [rows, setRows] = useState([
+    { id: Date.now(), name: "", category: "Electronics", qty: 1, unit: "pcs", low: 5, serialNumber: "", barcode: "", supplier: "", supplierOther: "", dateOfPurchase: "", warrantyDate: "" }
+  ]);
+
+  function addRow() {
+    setRows((prev) => [...prev, {
+      id: Date.now() + Math.random(), name: "", category: "Electronics", qty: 1, unit: "pcs", low: 5,
+      serialNumber: "", barcode: "", supplier: "", supplierOther: "", dateOfPurchase: "", warrantyDate: ""
+    }]);
+  }
+
+  function removeRow(id) {
+    setRows((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  function setField(id, field, value) {
+    setRows((prev) => prev.map((r) => r.id === id ? { ...r, [field]: value } : r));
+  }
+
+  function handleSubmit() {
+    const valid = rows.filter((r) => r.name.trim() && r.qty > 0);
+    if (valid.length === 0) { alert("Please fill in at least one item name and quantity."); return; }
+    const cartItems = valid.map((r) => ({
+      itemId: null,
+      isNew: true,
+      itemName: r.name.trim(),
+      category: r.category,
+      qty: parseInt(r.qty) || 1,
+      unit: r.unit,
+      low: parseInt(r.low) || 5,
+      details: {
+        serialNumber: r.serialNumber,
+        barcode: r.barcode,
+        supplier: r.supplier === "Other" ? r.supplierOther : r.supplier === "Select Supplier" ? "" : r.supplier,
+        dateOfPurchase: r.dateOfPurchase,
+        warrantyDate: r.warrantyDate,
+      }
+    }));
+    onAddToCart(cartItems);
+  }
+
+  return (
+    <div className="picker-panel">
+      <div className="picker-header">
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span className="picker-type-badge badge-type-in">▼ Stock In</span>
+          <span className="picker-subtitle">Add new items to inventory</span>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button onClick={addRow} className="cancel-btn" style={{ fontSize: 12 }}>+ Add Row</button>
+          <button onClick={handleSubmit} className="save-btn">🛒 Add to Cart</button>
+          <button onClick={onClose} className="cancel-btn">Cancel</button>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 520, overflowY: "auto", paddingRight: 4 }}>
+        {rows.map((row, idx) => (
+          <div key={row.id} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 12, padding: "1rem", display: "flex", flexDirection: "column", gap: 10 }}>
+
+            {/* Row header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Item {idx + 1}</span>
+              {rows.length > 1 && (
+                <button onClick={() => removeRow(row.id)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 16 }}>✕</button>
+              )}
+            </div>
+
+            {/* Row 1: Name + Category */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ flex: 2, minWidth: 160 }}>
+                <label className="field-label">Item Name *</label>
+                <input type="text" value={row.name} onChange={(e) => setField(row.id, "name", e.target.value)} placeholder="e.g. HP Laptop 14s" className="field-input" />
+              </div>
+              <div style={{ flex: 1, minWidth: 120 }}>
+                <label className="field-label">Category</label>
+                <select value={row.category} onChange={(e) => setField(row.id, "category", e.target.value)} className="field-input">
+                  {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Row 2: Qty + Unit + Low threshold */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 80 }}>
+                <label className="field-label">Quantity *</label>
+                <input type="number" min="1" value={row.qty} onChange={(e) => setField(row.id, "qty", e.target.value)} className="field-input" />
+              </div>
+              <div style={{ flex: 1, minWidth: 90 }}>
+                <label className="field-label">Unit</label>
+                <select value={row.unit} onChange={(e) => setField(row.id, "unit", e.target.value)} className="field-input">
+                  {UNITS.map((u) => <option key={u}>{u}</option>)}
+                </select>
+              </div>
+              <div style={{ flex: 1, minWidth: 80 }}>
+                <label className="field-label">Low Stock At</label>
+                <input type="number" min="0" value={row.low} onChange={(e) => setField(row.id, "low", e.target.value)} className="field-input" />
+              </div>
+            </div>
+
+            {/* Row 3: Serial + Barcode */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <label className="field-label">Serial Number</label>
+                <input type="text" value={row.serialNumber} onChange={(e) => setField(row.id, "serialNumber", e.target.value)} placeholder="e.g. SN-00123456" className="field-input" />
+              </div>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <label className="field-label">Barcode</label>
+                <input type="text" value={row.barcode} onChange={(e) => setField(row.id, "barcode", e.target.value)} placeholder="e.g. 4901234567890" className="field-input" />
+              </div>
+            </div>
+
+            {/* Row 4: Supplier */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <label className="field-label">Supplier</label>
+                <select value={row.supplier} onChange={(e) => setField(row.id, "supplier", e.target.value)} className="field-input">
+                  {SUPPLIERS.map((s) => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              {row.supplier === "Other" && (
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <label className="field-label">Supplier Name</label>
+                  <input type="text" value={row.supplierOther} onChange={(e) => setField(row.id, "supplierOther", e.target.value)} placeholder="Type supplier name..." className="field-input" />
+                </div>
+              )}
+            </div>
+
+            {/* Row 5: Dates */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <label className="field-label">Date of Purchase</label>
+                <input type="date" value={row.dateOfPurchase} onChange={(e) => setField(row.id, "dateOfPurchase", e.target.value)} className="field-input" />
+              </div>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <label className="field-label">Warranty Date</label>
+                <input type="date" value={row.warrantyDate} onChange={(e) => setField(row.id, "warrantyDate", e.target.value)} className="field-input" />
+              </div>
+            </div>
+
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StockOutPanel({ items, onAddToCart, onClose }) {
   const [quantities, setQuantities] = useState({});
   const [search, setSearch] = useState("");
 
@@ -39,20 +188,11 @@ function StockPickerPanel({ items, type, onAddToCart, onClose }) {
     const n = Math.max(0, parseInt(val) || 0);
     setQuantities((prev) => ({ ...prev, [id]: n }));
   }
-
-  function increment(id) {
-    setQuantities((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-  }
-
-  function decrement(id) {
-    setQuantities((prev) => ({ ...prev, [id]: Math.max(0, (prev[id] || 0) - 1) }));
-  }
+  function increment(id) { setQuantities((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 })); }
+  function decrement(id) { setQuantities((prev) => ({ ...prev, [id]: Math.max(0, (prev[id] || 0) - 1) })); }
 
   const filtered = items.filter(
-    (i) =>
-      i.name.toLowerCase().includes(search.toLowerCase()) ||
-      i.category.toLowerCase().includes(search.toLowerCase()) ||
-      generateSKU(i.id).toLowerCase().includes(search.toLowerCase())
+    (i) => i.name.toLowerCase().includes(search.toLowerCase()) || i.category.toLowerCase().includes(search.toLowerCase())
   );
 
   const selectedCount = Object.values(quantities).filter((q) => q > 0).length;
@@ -60,74 +200,48 @@ function StockPickerPanel({ items, type, onAddToCart, onClose }) {
   function handleAddToCart() {
     const cartItems = items
       .filter((i) => (quantities[i.id] || 0) > 0)
-      .map((i) => ({ itemId: i.id, itemName: i.name, sku: generateSKU(i.id), qty: quantities[i.id], unit: i.unit }));
+      .map((i) => ({ itemId: i.id, isNew: false, itemName: i.name, qty: quantities[i.id], unit: i.unit, details: {} }));
     if (cartItems.length === 0) return;
-
-    if (type === "stock_out") {
-      const overStock = cartItems.filter((ci) => {
+    const overStock = cartItems.filter((ci) => {
+      const item = items.find((i) => i.id === ci.itemId);
+      return item && ci.qty > item.qty;
+    });
+    if (overStock.length > 0) {
+      const names = overStock.map((ci) => {
         const item = items.find((i) => i.id === ci.itemId);
-        return item && ci.qty > item.qty;
-      });
-      if (overStock.length > 0) {
-        const names = overStock.map((ci) => {
-          const item = items.find((i) => i.id === ci.itemId);
-          return `• ${ci.itemName}: requested ${ci.qty}, available ${item.qty}`;
-        }).join("\n");
-        alert(`Cannot stock out — quantity exceeds available stock:\n\n${names}`);
-        return;
-      }
+        return `• ${ci.itemName}: requested ${ci.qty}, available ${item.qty}`;
+      }).join("\n");
+      alert(`Cannot stock out — quantity exceeds available stock:\n\n${names}`);
+      return;
     }
-
     onAddToCart(cartItems);
   }
-
-  const isIn = type === "stock_in";
 
   return (
     <div className="picker-panel">
       <div className="picker-header">
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span className={`picker-type-badge ${isIn ? "badge-type-in" : "badge-type-out"}`}>
-            {isIn ? "▼ Stock In" : "▲ Stock Out"}
-          </span>
-          <span className="picker-subtitle">Select items and quantities</span>
+          <span className="picker-type-badge badge-type-out">▲ Stock Out</span>
+          <span className="picker-subtitle">Select items and quantities to remove</span>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {selectedCount > 0 && (
-            <span className="picker-selected-count">{selectedCount} item{selectedCount > 1 ? "s" : ""} selected</span>
-          )}
-          <button
-            onClick={handleAddToCart}
-            className={`save-btn ${selectedCount === 0 ? "btn-disabled" : ""}`}
-            disabled={selectedCount === 0}
-          >
-            🛒 Add to Cart
-          </button>
+          {selectedCount > 0 && <span className="picker-selected-count">{selectedCount} item{selectedCount > 1 ? "s" : ""} selected</span>}
+          <button onClick={handleAddToCart} className={`save-btn ${selectedCount === 0 ? "btn-disabled" : ""}`} disabled={selectedCount === 0}>🛒 Add to Cart</button>
           <button onClick={onClose} className="cancel-btn">Cancel</button>
         </div>
       </div>
-
       <div style={{ marginBottom: 12 }}>
-        <input
-          type="text"
-          placeholder="Search items..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="search-input"
-          style={{ width: "100%", maxWidth: 320 }}
-        />
+        <input type="text" placeholder="Search items..." value={search} onChange={(e) => setSearch(e.target.value)} className="search-input" style={{ width: "100%", maxWidth: 320 }} />
       </div>
-
       <div style={{ maxHeight: 400, overflowY: "auto", borderRadius: 12, border: "1px solid var(--border)" }}>
         <table className="table" style={{ tableLayout: "fixed" }}>
           <thead>
             <tr>
-              <th className="th" style={{ width: "12%", textAlign: "center" }}>SKU</th>
-              <th className="th" style={{ width: "24%", textAlign: "center" }}>NAME</th>
-              <th className="th" style={{ width: "13%", textAlign: "center" }}>CATEGORY</th>
-              <th className="th" style={{ width: "13%", textAlign: "center" }}>AVAILABLE</th>
-              <th className="th" style={{ width: "10%", textAlign: "center" }}>STATUS</th>
-              <th className="th" style={{ width: "28%", textAlign: "center" }}>QTY TO ADD</th>
+              <th className="th" style={{ width: "30%", textAlign: "center" }}>NAME</th>
+              <th className="th" style={{ width: "20%", textAlign: "center" }}>CATEGORY</th>
+              <th className="th" style={{ width: "15%", textAlign: "center" }}>AVAILABLE</th>
+              <th className="th" style={{ width: "15%", textAlign: "center" }}>STATUS</th>
+              <th className="th" style={{ width: "20%", textAlign: "center" }}>QTY TO REMOVE</th>
             </tr>
           </thead>
           <tbody>
@@ -136,29 +250,17 @@ function StockPickerPanel({ items, type, onAddToCart, onClose }) {
               const { cls, label } = getStatus(item);
               return (
                 <tr key={item.id} style={{ background: qty > 0 ? "rgba(192,57,43,0.04)" : "transparent" }}>
-                  <td className="td td-sku" style={{ textAlign: "center" }}>{generateSKU(item.id)}</td>
                   <td className="td td-name" style={{ textAlign: "center" }} title={item.name}>{item.name}</td>
                   <td className="td" style={{ textAlign: "center" }}>{item.category}</td>
                   <td className="td" style={{ textAlign: "center" }}>{item.qty} <span style={{ color: "#888", fontSize: 12 }}>{item.unit}</span></td>
+                  <td className="td" style={{ textAlign: "center" }}><span className={`badge badge-${cls}`}>{label}</span></td>
                   <td className="td" style={{ textAlign: "center" }}>
-                    <span className={`badge badge-${cls}`}>{label}</span>
-                  </td>
-                  <td className="td" style={{ textAlign: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
                       <button onClick={() => decrement(item.id)} className="qty-btn qty-minus">−</button>
-                      <input
-                        type="number"
-                        min="0"
-                        value={qty}
-                        onChange={(e) => setQty(item.id, e.target.value)}
-                        className="qty-display"
-                        style={{ borderColor: type === "stock_out" && qty > item.qty ? "#e05c5c" : undefined }}
-                      />
+                      <input type="number" min="0" value={qty} onChange={(e) => setQty(item.id, e.target.value)} className="qty-display" style={{ borderColor: qty > item.qty ? "#e05c5c" : undefined }} />
                       <button onClick={() => increment(item.id)} className="qty-btn qty-plus">+</button>
                       <span className="qty-unit">{item.unit}</span>
-                      {type === "stock_out" && qty > item.qty && (
-                        <span style={{ fontSize: 10, color: "#e05c5c", fontWeight: 600 }}>max {item.qty}</span>
-                      )}
+                      {qty > item.qty && <span style={{ fontSize: 10, color: "#e05c5c", fontWeight: 600 }}>max {item.qty}</span>}
                     </div>
                   </td>
                 </tr>
@@ -169,6 +271,11 @@ function StockPickerPanel({ items, type, onAddToCart, onClose }) {
       </div>
     </div>
   );
+}
+
+function StockPickerPanel({ items, type, onAddToCart, onClose }) {
+  if (type === "stock_in") return <StockInForm onAddToCart={onAddToCart} onClose={onClose} />;
+  return <StockOutPanel items={items} onAddToCart={onAddToCart} onClose={onClose} />;
 }
 
 // ─── My Carts Tab ──────────────────────────────────────────────────────────────
@@ -234,7 +341,6 @@ function MyCartsTab({ carts, onCheckout, onDeleteCart, onUpdateCartItem, onAddMo
           <div className="cart-card-items">
             {cart.items.map((ci, idx) => (
               <div key={idx} className="cart-item-row">
-                <span className="cart-item-sku-sm">{ci.sku}</span>
                 <span className="cart-item-name-sm">{ci.itemName}</span>
                 {cart.status === "draft" ? (
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -315,7 +421,6 @@ function ActivityLogList({ entries, carts }) {
                 </div>
                 {cartMatch.items.map((ci, idx) => (
                   <div key={idx} style={{ display: "flex", gap: 12, fontSize: 12, alignItems: "center" }}>
-                    <span style={{ fontFamily: "Courier New, monospace", fontSize: 10, color: "var(--muted)", minWidth: 80 }}>{ci.sku}</span>
                     <span style={{ flex: 1, color: "var(--text)", fontWeight: 500 }}>{ci.itemName}</span>
                     <span style={{ color: "var(--accent)", fontWeight: 700 }}>× {ci.qty} {ci.unit}</span>
                   </div>
@@ -378,9 +483,7 @@ export default function InventoryManagement() {
   const [pickerType, setPickerType] = useState(null); // "stock_in" | "stock_out" | null
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("");
-  const [modal, setModal] = useState(false);
-  const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState(emptyForm);
+  
   const [historyModal, setHistoryModal] = useState(false);
   const [historyTarget, setHistoryTarget] = useState(null);
   const [declineModal, setDeclineModal] = useState(false);
@@ -391,6 +494,9 @@ export default function InventoryManagement() {
   const [logSort, setLogSort] = useState("Newest");
   const [cartFilterType, setCartFilterType] = useState("all");
   const [cartSort, setCartSort] = useState("newest");
+  const [deliveryModal, setDeliveryModal] = useState(false);
+  const [deliveryCartId, setDeliveryCartId] = useState(null);
+  const [deliveryForm, setDeliveryForm] = useState({ recipientName: "", address: "", city: "", contactNumber: "", deliveryNote: "" });
 
   // ── Logging ──
   function logActivity(action, detail, itemId = null) {
@@ -424,32 +530,7 @@ export default function InventoryManagement() {
     );
   }, [items, search, filterCat]);
 
-  // ── Item CRUD ──
-  function openAdd() { setEditId(null); setForm(emptyForm); setModal(true); }
-  function openEdit(item) { setEditId(item.id); setForm({ name: item.name, category: item.category, qty: item.qty, unit: item.unit, low: item.low }); setModal(true); }
-  function closeModal() { setModal(false); }
-  function setField(key, value) { setForm((prev) => ({ ...prev, [key]: value })); }
-
-  function handleSave() {
-    if (!form.name.trim()) return;
-    const payload = { name: form.name.trim(), category: form.category, qty: parseInt(form.qty) || 0, unit: form.unit, low: parseInt(form.low) || 5 };
-    if (role === "manager") {
-      if (editId !== null) {
-        setItems((prev) => prev.map((i) => i.id === editId ? { ...i, ...payload } : i));
-        logActivity("Edit Item", `Edited "${payload.name}" — qty: ${payload.qty} ${payload.unit}, category: ${payload.category}`, editId);
-      } else {
-        const newId = nextId;
-        setItems((prev) => [...prev, { ...payload, id: newId }]);
-        setNextId((n) => n + 1);
-        logActivity("Add Item", `Added "${payload.name}" (${generateSKU(newId)}) — qty: ${payload.qty} ${payload.unit}, category: ${payload.category}`, newId);
-      }
-    } else {
-      const req = { id: Date.now(), type: "add", payload, status: "pending" };
-      setRequests((prev) => [...prev, req]);
-      alert("Request submitted! Waiting for manager approval.");
-    }
-    closeModal();
-  }
+  
 
   function handleDelete(id) {
     if (role !== "manager") return;
@@ -469,47 +550,35 @@ export default function InventoryManagement() {
   }
 
   function handleAddToCart(cartItems) {
-    if (activeCartId) {
-      // Merge into existing cart
-      setCarts((prev) =>
-        prev.map((c) => {
-          if (c.id !== activeCartId) return c;
-          const merged = [...c.items];
-          cartItems.forEach((newItem) => {
-            const existing = merged.findIndex((m) => m.itemId === newItem.itemId);
-            if (existing >= 0) {
-              merged[existing] = { ...merged[existing], qty: merged[existing].qty + newItem.qty };
-            } else {
-              merged.push(newItem);
-            }
-          });
-          return { ...c, items: merged };
-        })
-      );
-      setActiveCartId(null);
-    } else {
-      const newCart = {
-        id: Date.now(),
-        cartId: generateCartId(),
-        type: pickerType,
-        items: cartItems,
-        status: "draft",
-        createdAt: new Date().toISOString(),
-      };
-      setCarts((prev) => [newCart, ...prev]);
-    }
+    const newCart = {
+      id: Date.now(),
+      cartId: generateCartId(),
+      type: pickerType,
+      items: cartItems,
+      status: "draft",
+      createdAt: new Date().toISOString(),
+    };
+    setCarts((prev) => [newCart, ...prev]);
     setPickerType(null);
     setActiveTab("carts");
   }
 
   function handleCheckout(cartId) {
+    setDeliveryCartId(cartId);
+    setDeliveryForm({ recipientName: "", address: "", city: "", contactNumber: "", deliveryNote: "" });
+    setDeliveryModal(true);
+  }
+
+  function confirmCheckout() {
+    const cartId = deliveryCartId;
     const cart = carts.find((c) => c.id === cartId);
     if (!cart) return;
-    if (!window.confirm(`Submit cart ${cart.cartId} for approval?\n\n${cart.items.length} item(s) will be sent to the manager.`)) return;
-    setCarts((prev) => prev.map((c) => c.id === cartId ? { ...c, status: "pending" } : c));
-    const req = { id: Date.now(), type: "cart", cartId: cart.cartId, cartDbId: cart.id, cartType: cart.type, items: cart.items, status: "pending" };
+    setCarts((prev) => prev.map((c) => c.id === cartId ? { ...c, status: "pending", delivery: deliveryForm } : c));
+    const req = { id: Date.now(), type: "cart", cartId: cart.cartId, cartDbId: cart.id, cartType: cart.type, items: cart.items, status: "pending", delivery: deliveryForm };
     setRequests((prev) => [...prev, req]);
-    logActivity("Cart Checkout", `Submitted cart ${cart.cartId} (${cart.type === "stock_in" ? "Stock In" : "Stock Out"}) — ${cart.items.length} item(s)`);
+    logActivity("Cart Checkout", `Submitted cart ${cart.cartId} (${cart.type === "stock_in" ? "Stock In" : "Stock Out"}) — ${cart.items.length} item(s) — Deliver to: ${deliveryForm.address}, ${deliveryForm.city}`);
+    setDeliveryModal(false);
+    setDeliveryCartId(null);
   }
 
   function handleDeleteCart(cartId) {
@@ -546,22 +615,26 @@ export default function InventoryManagement() {
       // Apply all cart items
       req.items.forEach((ci) => {
         if (req.cartType === "stock_in") {
-          setItems((prev) => prev.map((i) => i.id === ci.itemId ? { ...i, qty: i.qty + ci.qty } : i));
-          logActivity("Stock In", `Added ${ci.qty} ${ci.unit} to "${ci.itemName}" (${ci.sku}) via cart ${req.cartId}`, ci.itemId);
+          const newId = Date.now() + Math.random();
+          setItems((prev) => [...prev, {
+            id: newId,
+            name: ci.itemName,
+            category: ci.category || "Other",
+            qty: ci.qty,
+            unit: ci.unit,
+            low: ci.low || 5,
+            ...(ci.details || {}),
+          }]);
+          setNextId((n) => n + 1);
+          logActivity("Stock In", `Added new item "${ci.itemName}" — qty: ${ci.qty} ${ci.unit} via cart ${req.cartId}`, newId);
         } else {
           setItems((prev) => prev.map((i) => i.id === ci.itemId ? { ...i, qty: Math.max(0, i.qty - ci.qty) } : i));
-          logActivity("Stock Out", `Removed ${ci.qty} ${ci.unit} from "${ci.itemName}" (${ci.sku}) via cart ${req.cartId}`, ci.itemId);
+          logActivity("Stock Out", `Removed ${ci.qty} ${ci.unit} from "${ci.itemName}" via cart ${req.cartId}`, ci.itemId);
         }
       });
       setCarts((prev) => prev.map((c) => c.id === req.cartDbId ? { ...c, status: "approved" } : c));
       setNotifications((prev) => [...prev, { id: Date.now(), message: `Your cart ${req.cartId} was approved.`, read: false }]);
       logActivity("Approve Cart", `Approved cart ${req.cartId} (${req.cartType === "stock_in" ? "Stock In" : "Stock Out"}) — ${req.items.length} item(s)`);
-    } else if (req.type === "add") {
-      const newId = nextId;
-      setItems((prev) => [...prev, { ...req.payload, id: newId }]);
-      setNextId((n) => n + 1);
-      setNotifications((prev) => [...prev, { id: Date.now(), message: `Your "add item" request for "${req.payload.name}" was approved.`, read: false }]);
-      logActivity("Approve Request", `Approved add item request for "${req.payload.name}" (${generateSKU(newId)})`);
     }
 
     setRequests((prev) => prev.map((r) => r.id === reqId ? { ...r, status: "approved" } : r));
@@ -612,7 +685,7 @@ export default function InventoryManagement() {
 
   const pendingCount = requests.filter((r) => r.status === "pending").length;
   const draftCartCount = carts.filter((c) => c.status === "draft").length;
-  const colWidths = ["12%", "26%", "13%", "13%", "9%", "12%", "15%"];
+  const colWidths = ["30%", "15%", "15%", "10%", "15%", "15%"];
 
   return (
     <div className="root" data-theme={theme}>
@@ -667,7 +740,7 @@ export default function InventoryManagement() {
         <div className="tab-bar">
           <button
             className={`tab-btn ${activeTab === "inventory" ? "tab-active" : ""}`}
-            onClick={() => { setPickerType(null); setActiveCartId(null); setActiveTab("inventory"); }}
+            onClick={() => { setPickerType(null); setActiveTab("inventory"); }}
           >
             📦 Inventory
           </button>
@@ -739,19 +812,13 @@ export default function InventoryManagement() {
                 ▲ Stock Out
               </button>
 
-              <button onClick={openAdd} className="add-btn">
-                + {role === "manager" ? "Add Item" : "Request Item"}
-              </button>
+              
             </div>
 
             {/* Stock Picker Panel */}
             {pickerType && (
               <>
-                {activeCartId && (
-                  <div style={{ marginBottom: 8, fontSize: 12, color: "#6a9fd8", background: "rgba(90,120,200,0.08)", border: "1px solid rgba(90,120,200,0.2)", borderRadius: 8, padding: "6px 14px" }}>
-                    ✏️ Adding items to existing cart — items will be merged in
-                  </div>
-                )}
+                
                 <StockPickerPanel
                   items={items}
                   type={pickerType}
@@ -766,7 +833,7 @@ export default function InventoryManagement() {
               <table className="table">
                 <thead>
                   <tr>
-                    {["SKU", "Name", "Category", "Quantity", "Low At", "Status", "Actions"].map((h, i) => (
+                    {["Name", "Category", "Quantity", "Low At", "Status", "Actions"].map((h, i) => (
                       <th key={h} className="th" style={{ width: colWidths[i], textAlign: "center" }}>{h}</th>
                     ))}
                   </tr>
@@ -774,9 +841,9 @@ export default function InventoryManagement() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="td empty-state">
+                      <td colSpan={6} className="td empty-state">
                         {items.length === 0
-                          ? "No items yet — click + Add Item to get started"
+                          ? "No items yet — use Stock In to add your first item"
                           : "No items match your search"}
                       </td>
                     </tr>
@@ -784,16 +851,15 @@ export default function InventoryManagement() {
                     const { cls, label } = getStatus(item);
                     return (
                       <tr key={item.id}>
-                        <td className="td td-sku" style={{ width: colWidths[0], textAlign: "center" }}>{generateSKU(item.id)}</td>
-                        <td className="td td-name" style={{ width: colWidths[1], textAlign: "center" }} title={item.name}>{item.name}</td>
-                        <td className="td" style={{ width: colWidths[2], textAlign: "center" }}>{item.category}</td>
-                        <td className="td" style={{ width: colWidths[3], textAlign: "center" }}>{item.qty} <span style={{ color: "#888", fontSize: 12 }}>{item.unit}</span></td>
-                        <td className="td" style={{ width: colWidths[4], textAlign: "center" }}>{item.low} <span style={{ color: "#888", fontSize: 12 }}>{item.unit}</span></td>
-                        <td className="td" style={{ width: colWidths[5], textAlign: "left" }}>
+                        <td className="td td-name" style={{ width: colWidths[0], textAlign: "center" }} title={item.name}>{item.name}</td>
+                        <td className="td" style={{ width: colWidths[1], textAlign: "center" }}>{item.category}</td>
+                        <td className="td" style={{ width: colWidths[2], textAlign: "center" }}>{item.qty} <span style={{ color: "#888", fontSize: 12 }}>{item.unit}</span></td>
+                        <td className="td" style={{ width: colWidths[3], textAlign: "center" }}>{item.low} <span style={{ color: "#888", fontSize: 12 }}>{item.unit}</span></td>
+                        <td className="td" style={{ width: colWidths[4], textAlign: "left" }}>
                           <span className={`badge badge-${cls}`}>{label}</span>
                         </td>
-                        <td className="td" style={{ width: colWidths[6], textAlign: "center" }}>
-                          {role === "manager" && <button onClick={() => openEdit(item)} title="Edit" className="action-btn">✏️</button>}
+                        <td className="td" style={{ width: colWidths[5], textAlign: "center" }}>
+                          
                           {role === "manager" && <button onClick={() => handleDelete(item.id)} title="Delete" className="action-btn">🗑️</button>}
                           {role === "manager" && <button onClick={() => openHistoryModal(item)} title="History" className="action-btn">🕓</button>}
                           {role === "member" && <button onClick={() => openHistoryModal(item)} title="History" className="action-btn">🕓</button>}
@@ -895,7 +961,6 @@ export default function InventoryManagement() {
                     <div className="cart-card-items">
                       {cart.items.map((ci, idx) => (
                         <div key={idx} className="cart-item-row">
-                          <span className="cart-item-sku-sm">{ci.sku}</span>
                           <span className="cart-item-name-sm">{ci.itemName}</span>
                           <span className="cart-item-qty-sm">× {ci.qty} {ci.unit}</span>
                         </div>
@@ -930,12 +995,22 @@ export default function InventoryManagement() {
                         )}
                       </div>
                       {req.type === "cart" ? (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                          {req.items.map((ci, idx) => (
-                            <span key={idx} className="pending-detail" style={{ background: "var(--color-bg-muted, rgba(0,0,0,0.05))", padding: "2px 8px", borderRadius: 4 }}>
-                              {ci.sku} · {ci.itemName} × {ci.qty} {ci.unit}
-                            </span>
-                          ))}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {req.items.map((ci, idx) => (
+                              <span key={idx} className="pending-detail" style={{ background: "var(--color-bg-muted, rgba(0,0,0,0.05))", padding: "2px 8px", borderRadius: 4 }}>
+                                {ci.itemName} × {ci.qty} {ci.unit}
+                              </span>
+                            ))}
+                          </div>
+                          {req.delivery && (
+                            <div style={{ fontSize: 12, color: "var(--muted)", background: "rgba(90,120,200,0.06)", border: "1px solid rgba(90,120,200,0.15)", borderRadius: 8, padding: "8px 12px", display: "flex", flexDirection: "column", gap: 3 }}>
+                              <span style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>🚚 Delivery Info</span>
+                              <span><strong>To:</strong> {req.delivery.recipientName} · {req.delivery.contactNumber}</span>
+                              <span><strong>Address:</strong> {req.delivery.address}, {req.delivery.city}</span>
+                              {req.delivery.deliveryNote && <span><strong>Note:</strong> {req.delivery.deliveryNote}</span>}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="pending-detail">
@@ -1012,7 +1087,7 @@ export default function InventoryManagement() {
         <div onClick={(e) => { if (e.target === e.currentTarget) setHistoryModal(false); }} className="modal-bg">
           <div className="modal modal-large">
             <div className="modal-header-row">
-              <div className="modal-title">🕓 History — {historyTarget.name} <span style={{ fontSize: 12, fontWeight: 400, color: "#888" }}>({generateSKU(historyTarget.id)})</span></div>
+              <div className="modal-title">🕓 History — {historyTarget.name}</div>
               <button onClick={() => setHistoryModal(false)} className="modal-close-btn">✕</button>
             </div>
             <div className="history-list">
@@ -1038,6 +1113,41 @@ export default function InventoryManagement() {
         </div>
       )}
 
+      {/* ── Delivery Details Modal ── */}
+      {deliveryModal && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) setDeliveryModal(false); }} className="modal-bg">
+          <div className="modal" style={{ width: 420 }}>
+            <div className="modal-title">🚚 Delivery Details</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: "1.25rem", marginTop: -12 }}>
+              Fill in the delivery information before submitting for approval.
+            </div>
+            {[
+              { label: "Recipient Name", input: <input type="text" value={deliveryForm.recipientName} onChange={(e) => setDeliveryForm((p) => ({ ...p, recipientName: e.target.value }))} placeholder="Full name of recipient" className="field-input" /> },
+              { label: "Delivery Address", input: <input type="text" value={deliveryForm.address} onChange={(e) => setDeliveryForm((p) => ({ ...p, address: e.target.value }))} placeholder="Street address, building, unit" className="field-input" /> },
+              { label: "City / Municipality", input: <input type="text" value={deliveryForm.city} onChange={(e) => setDeliveryForm((p) => ({ ...p, city: e.target.value }))} placeholder="City or municipality" className="field-input" /> },
+              { label: "Contact Number", input: <input type="text" value={deliveryForm.contactNumber} onChange={(e) => setDeliveryForm((p) => ({ ...p, contactNumber: e.target.value }))} placeholder="e.g. 09XX-XXX-XXXX" className="field-input" /> },
+              { label: "Delivery Note (optional)", input: <textarea value={deliveryForm.deliveryNote} onChange={(e) => setDeliveryForm((p) => ({ ...p, deliveryNote: e.target.value }))} placeholder="Special instructions, landmarks, etc." className="field-input textarea-field" /> },
+            ].map(({ label, input }) => (
+              <div key={label} style={{ marginBottom: 14 }}>
+                <label className="field-label">{label}</label>
+                {input}
+              </div>
+            ))}
+            <div className="modal-actions">
+              <button onClick={() => setDeliveryModal(false)} className="cancel-btn">Cancel</button>
+              <button
+                onClick={confirmCheckout}
+                className="save-btn"
+                disabled={!deliveryForm.recipientName.trim() || !deliveryForm.address.trim() || !deliveryForm.city.trim()}
+                style={{ opacity: (!deliveryForm.recipientName.trim() || !deliveryForm.address.trim() || !deliveryForm.city.trim()) ? 0.4 : 1 }}
+              >
+                Submit for Approval
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Decline Modal ── */}
       {declineModal && (
         <div onClick={(e) => { if (e.target === e.currentTarget) setDeclineModal(false); }} className="modal-bg">
@@ -1058,40 +1168,7 @@ export default function InventoryManagement() {
         </div>
       )}
 
-      {/* ── Add / Edit Item Modal ── */}
-      {modal && (
-        <div onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }} className="modal-bg">
-          <div className="modal">
-            <div className="modal-title">{editId !== null ? "Edit Item" : "New Item"}</div>
-            {[
-              { label: "Name", input: <input type="text" value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="Item name" className="field-input" /> },
-              { label: "Category", input: (
-                <select value={form.category} onChange={(e) => setField("category", e.target.value)} className="field-input">
-                  {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-                </select>
-              )},
-              { label: "Quantity", input: (
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input type="number" min="0" value={form.qty} onChange={(e) => setField("qty", e.target.value)} className="field-input" style={{ flex: 1 }} />
-                  <select value={form.unit} onChange={(e) => setField("unit", e.target.value)} className="field-input" style={{ width: 100 }}>
-                    {UNITS.map((u) => <option key={u}>{u}</option>)}
-                  </select>
-                </div>
-              )},
-              { label: "Low Stock Threshold", input: <input type="number" min="0" value={form.low} onChange={(e) => setField("low", e.target.value)} className="field-input" /> },
-            ].map(({ label, input }) => (
-              <div key={label} style={{ marginBottom: 14 }}>
-                <label className="field-label">{label}</label>
-                {input}
-              </div>
-            ))}
-            <div className="modal-actions">
-              <button onClick={closeModal} className="cancel-btn">Cancel</button>
-              <button onClick={handleSave} className="save-btn">Save Item</button>
-            </div>
-          </div>
-        </div>
-      )}
+      
     </div>
   );
 }
