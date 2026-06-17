@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Laravel
+backend/vendor/
+backend/.env
+backend/storage/logs/
