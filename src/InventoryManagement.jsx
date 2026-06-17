@@ -999,6 +999,143 @@ const reportCarts = useMemo(() => {
   const pendingCount = requests.filter((r) => r.status === "pending").length;
   const draftCartCount = carts.filter((c) => c.status === "draft").length;
 
+async function exportDeliveryReceiptPDF(cart) {
+    const delivery = cart.delivery || {};
+    const receiptNumber = cart.cartId || "N/A";
+    const date = new Date(cart.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+    function toBase64(url) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL("image/png"));
+        };
+        img.onerror = () => resolve("");
+        img.src = url;
+      });
+    }
+
+    const [logo1, logo2, logo3] = await Promise.all([
+      toBase64(new URL("./assets/CRAVE CORP HIGH QUALITY LOGO.png", import.meta.url).href),
+      toBase64(new URL("./assets/CRAVE ADS LOGO SUPER HD.png", import.meta.url).href),
+      toBase64(new URL("./assets/Cravetech-08.png", import.meta.url).href),
+    ]);
+
+    const ROWS_PER_PAGE = 25;
+    const totalPages = Math.max(1, Math.ceil(cart.items.length / ROWS_PER_PAGE));
+
+    const pages = Array.from({ length: totalPages }, (_, pageIdx) => {
+      const pageItems = cart.items.slice(pageIdx * ROWS_PER_PAGE, (pageIdx + 1) * ROWS_PER_PAGE);
+      const rows = pageItems.map((ci, idx) => `
+        <tr>
+          <td style="border:1px solid #333;padding:5px 8px;text-align:center;">${pageIdx * ROWS_PER_PAGE + idx + 1}</td>
+          <td style="border:1px solid #333;padding:5px 8px;text-align:center;">${ci.qty}</td>
+          <td style="border:1px solid #333;padding:5px 8px;text-align:center;">${ci.unit}</td>
+          <td style="border:1px solid #333;padding:5px 8px;">${ci.itemName}</td>
+        </tr>
+      `).join("");
+
+      const isLastPage = pageIdx === totalPages - 1;
+
+      return `
+        <div style="page-break-after: ${isLastPage ? "avoid" : "always"}; width:216mm; min-height:279mm; padding:15mm 18mm; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between; font-family:Arial,sans-serif; font-size:12px; color:#000;">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+              <div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                  ${logo1 ? `<img src="${logo1}" style="height:44px;object-fit:contain;mix-blend-mode:multiply;" />` : ""}
+                  ${logo2 ? `<img src="${logo2}" style="height:44px;object-fit:contain;mix-blend-mode:multiply;" />` : ""}
+                  ${logo3 ? `<img src="${logo3}" style="height:44px;object-fit:contain;mix-blend-mode:multiply;" />` : ""}
+                </div>
+                <div style="font-size:10px;">CRAVE DIGITAL ADVERTISING SUPPLIES AND SERVICES</div>
+              </div>
+              <div style="text-align:right;font-size:11px;line-height:1.6;">
+                JS Building, Galo-Lacson Sts.<br/>
+                Bacolod City<br/>
+                <strong>MABELLE A. YEE - Proprietor</strong><br/>
+                Tel. No. (034) 708-0328<br/>
+                <strong>VAT Reg. TIN 931-643-930-000</strong>
+              </div>
+            </div>
+
+            <div style="font-size:22px;font-weight:bold;font-style:italic;text-decoration:underline;margin:8px 0 14px 0;">DELIVERY RECEIPT</div>
+
+            <div style="text-align:right;margin-bottom:14px;">
+              <strong>No. ${receiptNumber}</strong><br/>
+              Date: ${date}
+              ${totalPages > 1 ? `<br/><span style="font-size:10px;color:#666;">Page ${pageIdx + 1} of ${totalPages}</span>` : ""}
+            </div>
+
+            ${pageIdx === 0 ? `
+            <table style="width:100%;margin-bottom:14px;border-collapse:collapse;">
+              <tr><td style="width:110px;padding:2px 0;">Delivered to:</td><td><u><strong>${delivery.recipientName || "—"}</strong></u></td></tr>
+              <tr><td style="padding:2px 0;">Address:</td><td><u>${delivery.address || "—"}${delivery.city ? ", " + delivery.city : ""}</u></td></tr>
+              <tr><td style="padding:2px 0;">Contact:</td><td><u>${delivery.contactNumber || "—"}</u></td></tr>
+              ${delivery.deliveryNote ? `<tr><td style="padding:2px 0;">Note:</td><td><u>${delivery.deliveryNote}</u></td></tr>` : ""}
+            </table>` : `<div style="margin-bottom:12px;font-size:11px;color:#666;">Continuation — Delivered to: <strong>${delivery.recipientName || "—"}</strong></div>`}
+
+            <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+              <thead>
+                <tr>
+                  <th style="border:1px solid #333;padding:5px 8px;background:#f5f5f5;text-align:center;width:36px;">No.</th>
+                  <th style="border:1px solid #333;padding:5px 8px;background:#f5f5f5;text-align:center;width:54px;">Qty</th>
+                  <th style="border:1px solid #333;padding:5px 8px;background:#f5f5f5;text-align:center;width:64px;">Unit</th>
+                  <th style="border:1px solid #333;padding:5px 8px;background:#f5f5f5;text-align:left;">Description</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+
+          ${isLastPage ? `
+          <div>
+            <p style="margin-bottom:50px;">Received the following goods and articles in good condition.</p>
+            <div style="border-top:1px solid #000;width:240px;font-style:italic;font-size:11px;padding-top:4px;">Customer's Signature Over Printed Name</div>
+            <div style="font-size:10px;margin-top:30px;border-top:1px dashed #aaa;padding-top:8px;display:flex;justify-content:space-between;">
+              <span>THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAXES.</span>
+              <span>THIS DELIVERY RECEIPT SHALL BE VALID FOR FIVE (5) YEARS FROM THE DATE OF ATP</span>
+            </div>
+          </div>` : ""}
+        </div>
+      `;
+    }).join("");
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8"/>
+        <title>Delivery Receipt - ${receiptNumber}</title>
+        <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { background: #fff; }
+          @media print {
+            @page { size: letter portrait; margin: 0; }
+            body { margin: 0; }
+          }
+        </style>
+      </head>
+      <body>${pages}</body>
+      </html>
+    `;
+
+    const win = window.open("", "_blank");
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+
+    // Trigger Save as PDF via print dialog
+    setTimeout(() => {
+      win.print();
+    }, 800);
+  }
+
   async function generateDeliveryReceipt(cart) {
     const delivery = cart.delivery || {};
     const receiptNumber = cart.cartId || "N/A";
@@ -1455,13 +1592,22 @@ const reportCarts = useMemo(() => {
                             <span style={{ fontSize: 12, color: "#e05c5c" }}>Reason: {cart.declineReason}</span>
                           )}
                           {cart.status === "approved" && cart.type === "stock_out" && cart.delivery && (
-                            <button
-                              onClick={() => generateDeliveryReceipt(cart)}
-                              className="cancel-btn"
-                              style={{ fontSize: 11 }}
-                            >
-                              🖨️ Delivery Receipt
-                            </button>
+                            <>
+                              <button
+                                onClick={() => generateDeliveryReceipt(cart)}
+                                className="cancel-btn"
+                                style={{ fontSize: 11 }}
+                              >
+                                🖨️ Delivery Receipt
+                              </button>
+                              <button
+                                onClick={() => exportDeliveryReceiptPDF(cart)}
+                                className="cancel-btn"
+                                style={{ fontSize: 11 }}
+                              >
+                                📄 Export PDF
+                              </button>
+                            </>
                           )}
                           <span style={{ fontSize: 12, color: "#888" }}>
                             {new Date(cart.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
