@@ -12,10 +12,24 @@ class CartController extends Controller
 {
     public function index(Request $request)
     {
-        return response()->json(
-            Cart::with('items')->where('user_id', $request->user()->id)->latest()->get()
-        );
+        $query = Cart::with('items')->latest();
+
+        if ($request->user()->role !== 'manager') {
+            $query->where('user_id', $request->user()->id);
+        }
+
+        return response()->json($query->get());
     }
+
+    public function pending(Request $request)
+{
+    return response()->json(
+        Cart::with('items', 'user')
+            ->where('status', 'pending')
+            ->latest()
+            ->get()
+    );
+}
 
     public function store(Request $request)
     {
@@ -39,6 +53,7 @@ class CartController extends Controller
                 'low' => $ci['low'] ?? 5,
                 'is_new' => $ci['isNew'] ?? false,
                 'serial_number' => $ci['details']['serialNumber'] ?? null,
+                'serial_numbers' => $ci['details']['serialNumbers'] ?? null,
                 'barcode' => $ci['details']['barcode'] ?? null,
                 'supplier' => $ci['details']['supplier'] ?? null,
                 'date_of_purchase' => $ci['details']['dateOfPurchase'] ?? null,

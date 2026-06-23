@@ -20,6 +20,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Carts
     Route::get('/carts', [CartController::class, 'index']);
+    Route::get('/carts/pending', [CartController::class, 'pending']);
     Route::post('/carts', [CartController::class, 'store']);
     Route::post('/carts/{id}/checkout', [CartController::class, 'checkout']);
     Route::post('/carts/{id}/approve', [CartController::class, 'approve']);
