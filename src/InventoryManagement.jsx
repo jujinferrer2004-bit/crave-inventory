@@ -156,13 +156,13 @@ function StockInForm({ onAddToCart, onClose }) {
   }, []);
   const SUPPLIERS = ["Select Supplier", ...suppliers.map((s) => s.name), "Other"];
   const [rows, setRows] = useState([
-    { id: Date.now(), name: "", category: "Electronics", qty: 1, unit: "pcs", low: 5, serialNumber: "", barcode: "", supplier: "", supplierOther: "", dateOfPurchase: "", warrantyDate: "", deliveryReceiptNumber: "" }
+    { id: Date.now(), name: "", category: "Electronics", qty: 1, unit: "pcs", low: 5, serialNumber: "", serialNumbers: [], serialScanInput: "", barcode: "", supplier: "", supplierOther: "", dateOfPurchase: "", warrantyDate: "", deliveryReceiptNumber: "" }
   ]);
 
   function addRow() {
     setRows((prev) => [...prev, {
       id: Date.now() + Math.random(), name: "", category: "Electronics", qty: 1, unit: "pcs", low: 5,
-      serialNumber: "", barcode: "", supplier: "", supplierOther: "", dateOfPurchase: "", warrantyDate: "", deliveryReceiptNumber: ""
+      serialNumber: "", serialNumbers: [], serialScanInput: "", barcode: "", supplier: "", supplierOther: "", dateOfPurchase: "", warrantyDate: "", deliveryReceiptNumber: ""
     }]);
   }
 
@@ -174,9 +174,43 @@ function StockInForm({ onAddToCart, onClose }) {
     setRows((prev) => prev.map((r) => r.id === id ? { ...r, [field]: value } : r));
   }
 
+  function addSerialNumber(id) {
+    setRows((prev) => prev.map((r) => {
+      if (r.id !== id) return r;
+      const val = r.serialScanInput.trim();
+      if (!val) return r;
+      if (r.serialNumbers.length >= r.qty) return r;
+      return { ...r, serialNumbers: [...r.serialNumbers, val], serialScanInput: "" };
+    }));
+  }
+
+  function removeSerialNumber(id, index) {
+    setRows((prev) => prev.map((r) => {
+      if (r.id !== id) return r;
+      return { ...r, serialNumbers: r.serialNumbers.filter((_, i) => i !== index) };
+    }));
+  }
+
+  function handleScanKeyDown(e, id) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addSerialNumber(id);
+    }
+  }
+
   function handleSubmit() {
     const valid = rows.filter((r) => r.name.trim() && r.qty > 0);
     if (valid.length === 0) { alert("Please fill in at least one item name and quantity."); return; }
+
+    const incomplete = valid.filter((r) => r.qty > 1 && r.serialNumbers.length > 0 && r.serialNumbers.length < r.qty);
+    if (incomplete.length > 0) {
+      const names = incomplete.map((r) => `• ${r.name}: ${r.serialNumbers.length} / ${r.qty} serials scanned`).join("\n");
+      const proceed = window.confirm(
+        `Some items are missing serial numbers:\n\n${names}\n\nSubmit anyway? Missing slots will be left blank.`
+      );
+      if (!proceed) return;
+    }
+
     const cartItems = valid.map((r) => ({
       itemId: null,
       isNew: true,
@@ -187,6 +221,7 @@ function StockInForm({ onAddToCart, onClose }) {
       low: parseInt(r.low) || 5,
       details: {
         serialNumber: r.serialNumber,
+        serialNumbers: r.serialNumbers.length > 0 ? r.serialNumbers : null,
         barcode: r.barcode,
         supplier: r.supplier === "Other" ? r.supplierOther : r.supplier === "Select Supplier" ? "" : r.supplier,
         dateOfPurchase: r.dateOfPurchase,
@@ -257,10 +292,50 @@ function StockInForm({ onAddToCart, onClose }) {
 
             {/* Row 3: Serial + Barcode */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label className="field-label">Serial Number</label>
-                <input type="text" value={row.serialNumber} onChange={(e) => setField(row.id, "serialNumber", e.target.value)} placeholder="e.g. SN-00123456" className="field-input" />
-              </div>
+              {row.qty <= 1 ? (
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <label className="field-label">Serial Number</label>
+                  <input type="text" value={row.serialNumber} onChange={(e) => setField(row.id, "serialNumber", e.target.value)} placeholder="e.g. SN-00123456" className="field-input" />
+                </div>
+              ) : (
+                <div style={{ flex: 1, minWidth: 240 }}>
+                  <label className="field-label">
+                    Scan / Enter Serial Numbers ({row.serialNumbers.length} / {row.qty})
+                  </label>
+                  <input
+                    type="text"
+                    value={row.serialScanInput}
+                    onChange={(e) => setField(row.id, "serialScanInput", e.target.value)}
+                    onKeyDown={(e) => handleScanKeyDown(e, row.id)}
+                    placeholder={row.serialNumbers.length >= row.qty ? "All serials entered" : "Scan or type, then press Enter"}
+                    disabled={row.serialNumbers.length >= row.qty}
+                    className="field-input"
+                    autoFocus={false}
+                  />
+                  {row.serialNumbers.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                      {row.serialNumbers.map((sn, i) => (
+                        <span
+                          key={i}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 8px", fontSize: 12 }}
+                        >
+                          {sn}
+                          <button
+                            type="button"
+                            onClick={() => removeSerialNumber(row.id, i)}
+                            style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}
+                          >✕</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {row.serialNumbers.length < row.qty && row.serialNumbers.length > 0 && (
+                    <div style={{ fontSize: 11, color: "#e0a000", marginTop: 4 }}>
+                      {row.qty - row.serialNumbers.length} more needed
+                    </div>
+                  )}
+                </div>
+              )}
               <div style={{ flex: 1, minWidth: 140 }}>
                 <label className="field-label">Barcode</label>
                 <input type="text" value={row.barcode} onChange={(e) => setField(row.id, "barcode", e.target.value)} placeholder="e.g. 4901234567890" className="field-input" />
@@ -473,32 +548,46 @@ function MyCartsTab({ carts, onCheckout, onDeleteCart, onUpdateCartItem, onAddMo
 
           <div className="cart-card-items">
             {cart.items.map((ci, idx) => (
-              <div key={idx} className="cart-item-row">
-                <span className="cart-item-name-sm">{ci.itemName}</span>
-                {cart.status === "draft" ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <button
-                      onClick={() => onUpdateCartItem(cart.id, idx, ci.qty - 1)}
-                      className="qty-btn qty-minus"
-                      style={{ width: 22, height: 22, fontSize: 14 }}
-                    >−</button>
-                    <input
-                      type="number"
-                      min="1"
-                      value={ci.qty}
-                      onChange={(e) => onUpdateCartItem(cart.id, idx, parseInt(e.target.value) || 1)}
-                      className="qty-display"
-                      style={{ width: 42, fontSize: 12, padding: "2px 4px" }}
-                    />
-                    <button
-                      onClick={() => onUpdateCartItem(cart.id, idx, ci.qty + 1)}
-                      className="qty-btn qty-plus"
-                      style={{ width: 22, height: 22, fontSize: 14 }}
-                    >+</button>
-                    <span className="cart-item-qty-sm" style={{ marginLeft: 2 }}>{ci.unit}</span>
+              <div key={idx} className="cart-item-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="cart-item-name-sm">{ci.itemName}</span>
+                  {cart.status === "draft" ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <button
+                        onClick={() => onUpdateCartItem(cart.id, idx, ci.qty - 1)}
+                        className="qty-btn qty-minus"
+                        style={{ width: 22, height: 22, fontSize: 14 }}
+                      >−</button>
+                      <input
+                        type="number"
+                        min="1"
+                        value={ci.qty}
+                        onChange={(e) => onUpdateCartItem(cart.id, idx, parseInt(e.target.value) || 1)}
+                        className="qty-display"
+                        style={{ width: 42, fontSize: 12, padding: "2px 4px" }}
+                      />
+                      <button
+                        onClick={() => onUpdateCartItem(cart.id, idx, ci.qty + 1)}
+                        className="qty-btn qty-plus"
+                        style={{ width: 22, height: 22, fontSize: 14 }}
+                      >+</button>
+                      <span className="cart-item-qty-sm" style={{ marginLeft: 2 }}>{ci.unit}</span>
+                    </div>
+                  ) : (
+                    <span className="cart-item-qty-sm">× {ci.qty} {ci.unit}</span>
+                  )}
+                </div>
+                {ci.details?.serialNumbers && ci.details.serialNumbers.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                    <span style={{ fontSize: 10, color: "var(--muted)", marginRight: 2 }}>
+                      S/N ({ci.details.serialNumbers.length}/{ci.qty}):
+                    </span>
+                    {ci.details.serialNumbers.map((sn, i) => (
+                      <span key={i} style={{ fontSize: 11, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, padding: "1px 6px" }}>
+                        {sn}
+                      </span>
+                    ))}
                   </div>
-                ) : (
-                  <span className="cart-item-qty-sm">× {ci.qty} {ci.unit}</span>
                 )}
               </div>
             ))}
@@ -636,8 +725,7 @@ export default function InventoryManagement() {
   const [loading, setLoading] = useState(true);
 
   // ── Load data from API on mount ──
-  useEffect(() => {
-    async function loadData() {
+  async function loadData() {
       try {
         const [fetchedItems, fetchedCarts, fetchedLogs] = await Promise.all([
           api.getItems(),
@@ -666,6 +754,7 @@ export default function InventoryManagement() {
             isNew: ci.is_new,
             details: {
               serialNumber: ci.serial_number,
+              serialNumbers: ci.serial_numbers,
               barcode: ci.barcode,
               supplier: ci.supplier,
               dateOfPurchase: ci.date_of_purchase,
@@ -704,7 +793,9 @@ export default function InventoryManagement() {
       } finally {
         setLoading(false);
       }
-    }
+  }
+
+  useEffect(() => {
     loadData();
   }, [role]);
 
@@ -829,6 +920,7 @@ export default function InventoryManagement() {
           isNew: ci.is_new,
           details: {
             serialNumber: ci.serial_number,
+            serialNumbers: ci.serial_numbers,
             barcode: ci.barcode,
             supplier: ci.supplier,
             dateOfPurchase: ci.date_of_purchase,
@@ -1360,7 +1452,7 @@ async function exportDeliveryReceiptPDF(cart) {
           {role === "manager" && (
             <button
               className={`tab-btn ${activeTab === "requests" ? "tab-active" : ""}`}
-              onClick={() => { setPickerType(null); setActiveTab("requests"); }}
+              onClick={() => { setPickerType(null); setActiveTab("requests"); loadData(); }}
             >
               📋 Requests
               {pendingCount > 0 && <span className="tab-count tab-count-pending">{pendingCount}</span>}
@@ -1659,11 +1751,25 @@ async function exportDeliveryReceiptPDF(cart) {
         <span className="pending-type">▼ Stock In Cart</span>
         <span className="cart-card-id">{req.cartId}</span>
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {req.items.map((ci, idx) => (
-          <span key={idx} className="pending-detail" style={{ background: "var(--color-bg-muted, rgba(0,0,0,0.05))", padding: "2px 8px", borderRadius: 4 }}>
-            {ci.itemName} × {ci.qty} {ci.unit}
-          </span>
+          <div key={idx}>
+            <span className="pending-detail" style={{ background: "var(--color-bg-muted, rgba(0,0,0,0.05))", padding: "2px 8px", borderRadius: 4 }}>
+              {ci.itemName} × {ci.qty} {ci.unit}
+            </span>
+            {ci.details?.serialNumbers && ci.details.serialNumbers.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                <span style={{ fontSize: 10, color: "var(--muted)" }}>
+                  S/N ({ci.details.serialNumbers.length}/{ci.qty}):
+                </span>
+                {ci.details.serialNumbers.map((sn, i) => (
+                  <span key={i} style={{ fontSize: 11, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, padding: "1px 6px" }}>
+                    {sn}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
       </div>
     </div>
